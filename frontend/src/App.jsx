@@ -7,8 +7,20 @@ function App() {
   const [user, setUser] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [activeInstance, setActiveInstance] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  async function loadProjects() {
+    const response = await fetch("http://localhost:8000/api/projects", {
+      credentials: "include",
+    });
 
-  async function handleLogin(event) {
+    if (!response.ok) throw new Error("Unable to load projects");
+
+    setProjects(await response.json());
+  }
+   async function handleLogin(event) {
     event.preventDefault();
     setError("");
     setLoading(true);
@@ -26,23 +38,83 @@ function App() {
       if (!response.ok) throw new Error(data.detail);
 
       setUser(data);
+      await loadProjects();
     } catch (err) {
       setError(err.message || "Unable to log in");
     } finally {
       setLoading(false);
     }
   }
+  async function handleStartProject() {
+    if (!selectedProject) return;
 
-  if (user) {
-    return (
-      <main className="container">
-        <h1>Approval Portal</h1>
-        <p>Welcome, {user.name}</p>
-        <p>Role: {user.role}</p>
-        <button onClick={() => setUser(null)}>Continue</button>
-      </main>
-    );
+    setActionLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/projects/${selectedProject.id}/start`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.detail);
+
+      setActiveInstance(data);
+    } catch (err) {
+      setError(err.message || "Unable to start project");
+    } finally {
+      setActionLoading(false);
+    }
   }
+if (user) {
+  if (activeInstance) {
+  return (
+    <main className="container">
+      <h1>Approval Portal</h1>
+      <h2>{selectedProject.name}</h2>
+      <p>Project Instance: {activeInstance.id}</p>
+      <p>Status: {activeInstance.status}</p>
+      <p>Upload the required project documents to continue.</p>
+    </main>
+  );
+}
+  return (
+    <main className="container">
+      <h1>Approval Portal</h1>
+      <p>Welcome, {user.name}</p>
+
+      <section className="projects">
+        <h2>Available Projects</h2>
+
+        <div className="project-list">
+          {projects.map((project) => (
+            <button
+              key={project.id}
+              className={`project-card ${selectedProject?.id === project.id ? "selected" : ""}`}
+              onClick={() => setSelectedProject(project)}
+            >
+              <h3>{project.name}</h3>
+              <p>{project.description}</p>
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="error">{error}</p>}
+
+        {selectedProject && (
+          <button onClick={handleStartProject} disabled={actionLoading}>
+            {actionLoading ? "Starting..." : "Start Project"}
+          </button>
+        )}
+      </section>
+    </main>
+  );
+}
 
   return (
     <main className="container">

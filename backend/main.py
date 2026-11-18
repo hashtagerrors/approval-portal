@@ -138,3 +138,38 @@ def get_projects():
         ).fetchall()
 
     return [dict(row) for row in rows]
+
+@app.post("/api/projects/{project_id}/start", status_code=201)
+def start_project(project_id: int, user=Depends(get_current_user)):
+    with closing(get_connection()) as conn:
+        with conn:
+            project = conn.execute(
+                "SELECT id FROM projects WHERE id = ?", (project_id,)
+            ).fetchone()
+
+            if not project:
+                raise HTTPException(status_code=404, detail="Project not found")
+
+            cursor = conn.execute(
+                """
+                INSERT INTO project_instances (project_id, created_by)
+                VALUES (?, ?)
+                """,
+                (project_id, user["id"]),
+            )
+
+            instance_id = cursor.lastrowid
+
+            conn.execute(
+                """
+                INSERT INTO workflow_events (instance_id, actor_id, event_type)
+                VALUES (?, ?, ?)
+                """,
+                (instance_id, user["id"], "PROJECT_STARTED"),
+            )
+
+    return {
+        "id": instance_id,
+        "project_id": project_id,
+        "status": "DRAFT",
+    }
