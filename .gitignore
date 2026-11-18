@@ -1,0 +1,42 @@
+
+# Dependencies
+node_modules/
+venv/
+.venv/
+/backend/venv/
+/backend/.venv/
+/backend/node_modules/
+/backend/__pycache__/
+/frontend/venv/
+/frontend/.venv/
+/frontend/node_modules/
+/backend/venv/
+**/__pycache__/
+**/venv/
+**/.venv/
+**/node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Build output
+dist/
+
+# Local configuration
+.env
+.env.*
+
+# Local database
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded files
+storage/*
+!storage/.gitkeep
+
+# Editor and OS files
+.vscode/
+.DS_Store
