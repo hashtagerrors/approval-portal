@@ -11,6 +11,10 @@ function App() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [activeInstance, setActiveInstance] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [documents, setDocuments] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [approvals, setApprovals] = useState([]);
+
   async function loadProjects() {
     const response = await fetch("http://localhost:8000/api/projects", {
       credentials: "include",
@@ -38,7 +42,11 @@ function App() {
       if (!response.ok) throw new Error(data.detail);
 
       setUser(data);
-      await loadProjects();
+      if (data.role === "APPROVER") {
+        await loadApprovals();
+      } else {
+        await loadProjects();
+      }
     } catch (err) {
       setError(err.message || "Unable to log in");
     } finally {
@@ -71,50 +79,160 @@ function App() {
       setActionLoading(false);
     }
   }
-if (user) {
-  if (activeInstance) {
-  return (
-    <main className="container">
-      <h1>Approval Portal</h1>
-      <h2>{selectedProject.name}</h2>
-      <p>Project Instance: {activeInstance.id}</p>
-      <p>Status: {activeInstance.status}</p>
-      <p>Upload the required project documents to continue.</p>
-    </main>
-  );
-}
-  return (
-    <main className="container">
-      <h1>Approval Portal</h1>
-      <p>Welcome, {user.name}</p>
+  async function handleUpload(event) {
+    const file = event.target.files[0];
 
-      <section className="projects">
-        <h2>Available Projects</h2>
+    if (!file) return;
 
-        <div className="project-list">
-          {projects.map((project) => (
-            <button
-              key={project.id}
-              className={`project-card ${selectedProject?.id === project.id ? "selected" : ""}`}
-              onClick={() => setSelectedProject(project)}
-            >
-              <h3>{project.name}</h3>
-              <p>{project.description}</p>
-            </button>
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setUploading(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/projects/instances/${activeInstance.id}/documents`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.detail);
+
+      setDocuments((current) => [...current, data]);
+      event.target.value = "";
+    } catch (err) {
+      setError(err.message || "Document upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+  async function loadApprovals() {
+    const response = await fetch("http://localhost:8000/api/approvals", {
+      credentials: "include",
+    });
+
+    if (!response.ok) throw new Error("Unable to load approvals");
+
+    setApprovals(await response.json());
+  }
+  async function handleApprove(instanceId) {
+    setError("");
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/approvals/${instanceId}/approve`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.detail);
+
+      setApprovals((current) =>
+        current.filter((item) => item.instance_id !== instanceId)
+      );
+    } catch (err) {
+      setError(err.message || "Approval failed");
+    }
+  }
+  if (user) {
+    if (user?.role === "APPROVER") {
+      return (
+        <main className="container">
+          <h1>Approval Portal</h1>
+          <h2>Pending Approvals</h2>
+          <p>Welcome, {user.name}</p>
+
+          {error && <p className="error">{error}</p>}
+
+          {approvals.length === 0 && <p>No pending approvals.</p>}
+
+          {approvals.map((item) => (
+            <section className="project-card" key={item.instance_id}>
+              <h3>{item.project_name}</h3>
+              <p>Requested by: {item.requested_by}</p>
+              <p>Documents: {item.document_count}</p>
+              <p>Instance ID: {item.instance_id}</p>
+
+              <button onClick={() => handleApprove(item.instance_id)}>
+                Approve
+              </button>
+            </section>
           ))}
-        </div>
+        </main>
+      );
+    }
+    if (activeInstance) {
+      return (
+        <main className="container">
+          <h1>Approval Portal</h1>
+          <h2>{selectedProject.name}</h2>
+          <p>Project Instance: {activeInstance.id}</p>
+          <p>Status: {activeInstance.status}</p>
 
-        {error && <p className="error">{error}</p>}
+          <section>
+            <h3>Upload Documents</h3>
 
-        {selectedProject && (
-          <button onClick={handleStartProject} disabled={actionLoading}>
-            {actionLoading ? "Starting..." : "Start Project"}
-          </button>
-        )}
-      </section>
-    </main>
-  );
-}
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx"
+              onChange={handleUpload}
+              disabled={uploading}
+            />
+
+            {uploading && <p>Uploading document...</p>}
+            {error && <p className="error">{error}</p>}
+
+            <ul>
+              {documents.map((document) => (
+                <li key={document.id}>{document.filename}</li>
+              ))}
+            </ul>
+          </section>
+        </main>
+      );
+    }
+    return (
+      <main className="container">
+        <h1>Approval Portal</h1>
+        <p>Welcome, {user.name}</p>
+
+        <section className="projects">
+          <h2>Available Projects</h2>
+
+          <div className="project-list">
+            {projects.map((project) => (
+              <button
+                key={project.id}
+                className={`project-card ${selectedProject?.id === project.id ? "selected" : ""}`}
+                onClick={() => setSelectedProject(project)}
+              >
+                <h3>{project.name}</h3>
+                <p>{project.description}</p>
+              </button>
+            ))}
+          </div>
+
+          {error && <p className="error">{error}</p>}
+
+          {selectedProject && (
+            <button onClick={handleStartProject} disabled={actionLoading}>
+              {actionLoading ? "Starting..." : "Start Project"}
+            </button>
+          )}
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="container">
