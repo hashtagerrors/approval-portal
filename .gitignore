@@ -15,7 +15,8 @@ venv/
 **/venv/
 **/.venv/
 **/node_modules/
-
+p-backend/
+/p-backend/
 # Python
 __pycache__/
 *.py[cod]
